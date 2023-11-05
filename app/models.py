@@ -1,5 +1,5 @@
 from .database import Base
-from sqlalchemy import  TIMESTAMP, Column, Integer, String, Boolean, text, ForeignKey
+from sqlalchemy import  TIMESTAMP, Column, Integer, String, Boolean, text, ForeignKey, ARRAY
 from sqlalchemy.orm import relationship
 
 class Post(Base):
@@ -27,3 +27,9 @@ class Vote(Base):
     
     user_id = Column(Integer, ForeignKey("users.id" , ondelete="CASCADE"), primary_key=True)
     post_id = Column(Integer, ForeignKey("posts.id" , ondelete="CASCADE"), primary_key=True)
+
+class Test(Base):
+    __tablename__ = "test"
+    
+    user_id = Column(Integer, nullable=False, primary_key=True)
+    seen_posts = Column(Integer ,nullable=False, primary_key=True)

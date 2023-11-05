@@ -3,30 +3,95 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from fastapi import FastAPI,Response,status, HTTPException, Depends, APIRouter
 from ..database import get_db 
-from sqlalchemy.sql import func 
-
+from sqlalchemy.sql import func,desc
+from sqlalchemy import ARRAY
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import time
 router = APIRouter(
     prefix='/posts',
     tags = ['Posts']
 )
 
+while True:
+    try:
+        conn = psycopg2.connect(host = "localhost", database='fastapi', user='postgres',
+                                password='password123', cursor_factory=RealDictCursor)
+        cursor = conn.cursor()
+        print("sucess")
+        break
+    except Exception as error:
+        print("connection failed")
+        print("Error",error)
+        time.sleep(2)
+
 @router.get("/",response_model=List[schemas.PostWithVote])
-def get_posts(db: Session = Depends(get_db), limit:int = 10,skip:int=0, search:Optional[str]="" ):
+def get_posts(db: Session = Depends(get_db),current_user:models.User = 
+                 Depends(oauth2.get_current_user), limit:int = 5, skip:int = 0, search:Optional[str] = ""):
     # cursor.execute("""SELECT * FROM posts""")
     # posts = cursor.fetchall()
     # posts = db.query(models.Post).all()
+    
+    no_of_seen_posts = db.query(models.Test).filter(models.Test.user_id == current_user.id).count()
+    total_posts = db.query(models.Post).count()
+    new_limit = (no_of_seen_posts+limit) - total_posts
+    new_limit = new_limit if new_limit>0 else 0
+    print(new_limit)
+    
     posts = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
         models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(
-            models.Post.id).filter(models.Post.name.contains(search)).limit(limit).offset(skip).all()
-    print(posts)
-    return posts
+            models.Post.id).filter(models.Post.id.not_in(db.query(models.Test.seen_posts).filter(models.Test.user_id == current_user.id))
+                                   ,models.Post.name.contains(search),models.Post.published==True).order_by(
+                desc("votes"),desc(models.Post.created_at)).limit(limit).offset(skip)
+    
+    remaining_post = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
+        models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(
+            models.Post.id).filter(models.Post.name.contains(search),models.Post.published==True).order_by(
+                desc("votes"),desc(models.Post.created_at)).limit(new_limit).offset(skip)
+    final_post = posts.union_all(remaining_post)
+    to_be_returned = final_post.all()
+    
+    post_ids = db.query(models.Post.id, func.count(models.Vote.post_id).label("votes")).join(
+        models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(
+            models.Post.id).filter(models.Post.id.not_in(db.query(models.Test.seen_posts).filter(models.Test.user_id == current_user.id))
+                ,models.Post.name.contains(search),models.Post.published==True).order_by(
+                desc("votes"),desc(models.Post.created_at)).limit(limit).offset(skip).all()
+    
+    print(post_ids)
+    get_user = db.query(models.Test).filter(models.Test.user_id == current_user.id)
+    
+    # if not get_user.first():
+    #     post_ids_array = []
+    #     for (id,count) in post_ids:
+    #         post_ids_array.append(id)
+    posts_seen_by_user = db.query(models.Test.seen_posts).filter(models.Test.user_id == current_user.id).all()
+    for (post_id,count) in post_ids:
+        if (post_id,) not in posts_seen_by_user: 
+            new_entry = models.Test(seen_posts = post_id,user_id = current_user.id)
+            db.add(new_entry)
+    db.commit()
+    # else:
+    #     (seen_posts_py,) = db.query(models.Test.seen_posts).filter(models.Test.user_id == current_user.id).first()
+    #     print(seen_posts_py)
+    #     for (id,count) in post_ids:
+    #         if id not in seen_posts_py:
+    #             cursor.execute("""UPDATE test
+    #                             SET seen_posts = ARRAY_APPEND(seen_posts,%s)
+    #                             WHERE user_id = %s""",(id,current_user.id))
+    #     conn.commit()
+    # (seen_post_ids_array,) = db.query(models.Test.seen_posts).filter(models.Test.user_id == current_user.id)
+    # updated_limit = limit - len(seen_post_ids_array) if limit >= len(seen_post_ids_array) else 0
+    # print(posts)
+    
+    return to_be_returned
 
 
 @router.get("/myposts",response_model = List[schemas.PostWithVote])
-def get_my_posts(db : Session = Depends(get_db), current_user = Depends(oauth2.get_current_user)):
+def get_my_posts(db : Session = Depends(get_db), current_user = Depends(oauth2.get_current_user), limit:int = 5,skip:int = 0,search:Optional[str] = ""):
     my_posts = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
         models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(
-            models.Post.id).filter(models.Post.owner_id == current_user.id).all()
+            models.Post.id).filter(models.Post.name.contains(search),models.Post.published==True).order_by(
+                desc("votes"),desc(models.Post.created_at)).limit(limit).offset(skip)
     return my_posts 
 
 @router.get('/{id}') 
