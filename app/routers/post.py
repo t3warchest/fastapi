@@ -35,7 +35,7 @@ def get_posts(db: Session = Depends(get_db),current_user:models.User =
     no_of_seen_posts = db.query(models.Test).filter(models.Test.user_id == current_user.id).count()
     total_posts = db.query(models.Post).count()
     new_limit = (no_of_seen_posts+limit) - total_posts
-    new_limit = new_limit if new_limit>0 else 0
+    new_limit = new_limit if new_limit>0 else limit
     print(new_limit)
     
     posts = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
@@ -112,24 +112,22 @@ def get_post(id: int, response : Response,db: Session = Depends(get_db)) -> sche
     return posts
 
 
-@router.post("/",status_code =status.HTTP_201_CREATED, response_model=schemas.PostResponse)
-def create_posts(post: schemas.PostCreate,db: Session = Depends(get_db), current_user:models.User = 
-                 Depends(oauth2.get_current_user)):
+@router.post("/",status_code =status.HTTP_201_CREATED,response_model=schemas.PostResponse) #, response_model=schemas.PostResponse
+def create_posts(posts: schemas.PostCreate,db: Session = Depends(get_db), current_user:models.User = 
+                 Depends(oauth2.get_current_user)): # change posts: List[schemas.PostCreate] to post:schemas.PostCreate
+    
     # cursor.execute(""" INSERT INTO posts (name,content,published) VALUES(%s,%s,%s) RETURNING *""",
     #                (post.name,post.content,post.published))
     # new_post = cursor.fetchone()
     # print(new_post)
     # conn.commit()
     
-    
-    
-    
-    # print(current_user.email)
-    new_post = models.Post(**post.model_dump(),owner_id = current_user.id)
+     #remove for loop 
+    new_post = models.Post(**posts.model_dump(),owner_id = current_user.id)
     db.add(new_post)
     db.commit()
     db.refresh(new_post)
-    return new_post
+    return new_post#return new_post
 
 
 @router.delete('/{id}',status_code=status.HTTP_204_NO_CONTENT)

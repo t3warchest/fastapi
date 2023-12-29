@@ -54,3 +54,24 @@ class TokenData(BaseModel):
 class Vote(BaseModel):
     post_id : int
     dir : conint(le=1)
+    
+class Comment(BaseModel):
+    post_id : int
+    comment : str
+
+class CommentGetResponse(BaseModel):
+    comment : str
+    created_at : datetime
+    commenter_id : int
+
+class CommentResponse(BaseModel):
+    name : str
+    content : str
+    owner_id : int
+    comment : str
+    commenter_id : int
+    created_at : datetime
+    
+    class Config:
+        orm_mode = True
+    

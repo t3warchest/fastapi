@@ -34,10 +34,10 @@ def verify_token(token : str, credentials_exception):
         if id is None:
             raise credentials_exception
         
-        token_data = schemas.TokenData(id=id) #what is token data?
+        token_data = schemas.TokenData(id=id) 
     
-    except JWTError: #what
-        raise credentials_exception #what
+    except JWTError: 
+        raise credentials_exception 
     
     # print(token_data) :=>output = "id = 15"
     return token_data
